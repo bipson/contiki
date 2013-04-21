@@ -235,7 +235,7 @@ main(int argc, char **argv)
     node_mac[0] = 0x00;
     node_mac[1] = 0x01;     
     node_mac[2] = 0x00; 
-    node_mac[3] = 0x02;  /* Hardcoded */
+    node_mac[3] = 0x03;  /* Hardcoded */
     node_mac[4] = 0x00;  /* Hardcoded */
     node_mac[5] = 0x00;  /* Hardcoded */
     node_mac[6] = node_id >> 8;
@@ -256,9 +256,9 @@ main(int argc, char **argv)
   node_mac[3] = 0x00;  /* Hardcoded */
   #endif
   node_mac[0] = 0x00;
-  node_mac[1] = 0x00;     
+  node_mac[1] = 0x01;     
   node_mac[2] = 0x00; 
-  node_mac[3] = 0x02;  /* Hardcoded */
+  node_mac[3] = 0x03;  /* Hardcoded */
   node_mac[4] = 0x00;  /* Hardcoded */
   node_mac[5] = 0x00;  /* Hardcoded */
   node_mac[6] = MACID >> 8;

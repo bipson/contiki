@@ -89,15 +89,17 @@
 #define PRINTLLADDR(addr)
 #endif
 
-#define TEMP_MSG_MAX_SIZE 140 // more than enough right now
-#define TEMP_BUFF_MAX 7       // -234.6\0
+/******************************************************************************/
+#if REST_RES_TEMP
 
+#define CHUNKS_TOTAL      1024 
+#define TEMP_MSG_MAX_SIZE 140   // more than enough right now
+#define TEMP_BUFF_MAX     7     // -234.6\0
 
 /******************************************************************************/
 /* globals ********************************************************************/
 /******************************************************************************/
 char tempstring[TEMP_BUFF_MAX];
-
 
 /******************************************************************************/
 /* helper functions ***********************************************************/
@@ -121,7 +123,7 @@ int temp_to_buff(char* buffer) {
   }
   tempint  = (absraw >> 8) * sign;
   tempfrac = ((absraw>>4) % 16) * 625; // Info in 1/10000 of degree
-  tempfrac = (tempfrac + 500 ) / 1000; // Round to 1 decimal
+  tempfrac = ((tempfrac) / 1000); // Round to 1 decimal
 
   return snprintf(tempstring, TEMP_BUFF_MAX, "%d.%1d", tempint, tempfrac);
 }
@@ -184,19 +186,11 @@ uint8_t create_response(int num, int accept, char *buffer)
   return size_msg;
 }
 
-
-/******************************************************************************/
-#if REST_RES_TEMP
-
-#define CHUNKS_TOTAL      1024 
 /*
  * Resources are defined by the RESOURCE macro.
  * Signature: resource name, the RESTful methods it handles, and its URI path (omitting the leading slash).
  */
-RESOURCE(temp, METHOD_GET, "temp", "title=\"Hello temp: ?len=0..\";rt=\"Text\"");
-/* we save the message as global variable, so it is retained through multiple calls (chunked resource) */
-char message[TEMP_MSG_MAX_SIZE];
-uint8_t size_msg;
+PERIODIC_RESOURCE(temp, METHOD_GET, "temp", "title=\"Hello temp: ?len=0..\";rt=\"Text\"", 5*CLOCK_SECOND);
 
 /*
  * A handler function named [resource name]_handler must be implemented for each RESOURCE.
@@ -207,9 +201,13 @@ uint8_t size_msg;
 void
 temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
 {
+  /* we save the message as static variable, so it is retained through multiple calls (chunked resource) */
+  static char message[TEMP_MSG_MAX_SIZE];
+  static uint8_t size_msg;
 
   const uint16_t *accept = NULL;
   int num = 0, length = 0;
+  char *err_msg;
 
   const char *len = NULL;
 
@@ -218,7 +216,8 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
   {
     REST.set_response_status(response, REST.status.BAD_OPTION);
     /* A block error message should not exceed the minimum block size (16). */
-    REST.set_response_payload(response, "BlockOutOfScope", strlen(message));
+    err_msg = "BlockOutOfScope";
+    REST.set_response_payload(response, err_msg, strlen(err_msg));
     return;
   }
 
@@ -238,10 +237,11 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
     }
     else
     {
+      PRINTF("wrong content-type!\n");
       REST.set_header_content_type(response, REST.type.TEXT_PLAIN);
       REST.set_response_status(response, REST.status.UNSUPPORTED_MADIA_TYPE);
-
-      REST.set_response_payload(response, "Supporting content-types application/xml and application/exi", strlen(message));
+      err_msg = "Supporting content-types application/xml and application/exi";
+      REST.set_response_payload(response, err_msg, strlen(err_msg));
       return;
     }
 
@@ -249,7 +249,8 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
     {
       PRINTF("ERROR while creating message!\n");
       REST.set_response_status(response, REST.status.INTERNAL_SERVER_ERROR);
-      REST.set_response_payload(response, "ERROR while creating message :\\", strlen(message));
+      err_msg = "ERROR while creating message :\\";
+      REST.set_response_payload(response, err_msg, strlen(err_msg));
       return;
     }
 
@@ -261,7 +262,8 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
   {
     PRINTF("AHOYHOY?!\n");
     REST.set_response_status(response, REST.status.INTERNAL_SERVER_ERROR);
-    REST.set_response_payload(response, "calculation of message length error, this should not happen :\\", strlen(message));
+    err_msg = "calculation of message length error, this should not happen :\\";
+    REST.set_response_payload(response, err_msg, strlen(err_msg));
     return;
   }
 
@@ -300,6 +302,31 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
   REST.set_header_etag(response, (uint8_t *) &length, 1);
   REST.set_response_payload(response, buffer, length);
 
+}
+
+void temp_periodic_handler(resource_t *r)
+{
+  static char new_value[TEMP_BUFF_MAX];
+  static uint8_t obs_counter = 0;
+  size_t size_msg;
+
+  temp_to_buff(new_value);
+
+  if (strcmp(new_value, tempstring) != 0)
+  {
+    if ((size_msg = create_response(1, REST.type.APPLICATION_XML, tempstring)) <= 0)
+    {
+      return;
+    }
+    
+    /* Build notification. */
+    coap_packet_t notification[1]; /* This way the packet can be treated as pointer as usual. */
+    coap_init_message(notification, COAP_TYPE_NON, CONTENT_2_05, 0 );
+    coap_set_payload(notification, tempstring, size_msg);
+
+    /* Notify the registered observers with the given message type, observe option, and payload. */
+    REST.notify_subscribers(r, obs_counter, notification);
+  }
 }
 
 /* this would be a process that polls temperature on its own */
@@ -806,113 +833,6 @@ sub_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_s
 #endif
 
 /******************************************************************************/
-#if defined (PLATFORM_HAS_LEDS)
-/******************************************************************************/
-#if REST_RES_LEDS
-/*A simple actuator example, depending on the color query parameter and post variable mode, corresponding led is activated or deactivated*/
-RESOURCE(leds, METHOD_POST | METHOD_PUT , "actuators/leds", "title=\"LEDs: ?color=r|g|b, POST/PUT mode=on|off\";rt=\"Control\"");
-
-void
-leds_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
-{
-  size_t len = 0;
-  const char *color = NULL;
-  const char *mode = NULL;
-  uint8_t led = 0;
-  int success = 1;
-
-  if ((len=REST.get_query_variable(request, "color", &color))) {
-    PRINTF("color %.*s\n", len, color);
-
-    if (strncmp(color, "r", len)==0) {
-      led = LEDS_RED;
-    } else if(strncmp(color,"g", len)==0) {
-      led = LEDS_GREEN;
-    } else if (strncmp(color,"b", len)==0) {
-      led = LEDS_BLUE;
-    } else {
-      success = 0;
-    }
-  } else {
-    success = 0;
-  }
-
-  if (success && (len=REST.get_post_variable(request, "mode", &mode))) {
-    PRINTF("mode %s\n", mode);
-
-    if (strncmp(mode, "on", len)==0) {
-      leds_on(led);
-    } else if (strncmp(mode, "off", len)==0) {
-      leds_off(led);
-    } else {
-      success = 0;
-    }
-  } else {
-    success = 0;
-  }
-
-  if (!success) {
-    REST.set_response_status(response, REST.status.BAD_REQUEST);
-  }
-}
-#endif
-
-/******************************************************************************/
-#if REST_RES_TOGGLE
-/* A simple actuator example. Toggles the red led */
-RESOURCE(toggle, METHOD_GET | METHOD_PUT | METHOD_POST, "actuators/toggle", "title=\"Red LED\";rt=\"Control\"");
-void
-toggle_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
-{
-  leds_toggle(LEDS_RED);
-}
-#endif
-#endif /* PLATFORM_HAS_LEDS */
-
-/******************************************************************************/
-#if REST_RES_LIGHT && defined (PLATFORM_HAS_LIGHT)
-/* A simple getter example. Returns the reading from light sensor with a simple etag */
-RESOURCE(light, METHOD_GET, "sensors/light", "title=\"Photosynthetic and solar light (supports JSON)\";rt=\"LightSensor\"");
-void
-light_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
-{
-  uint16_t light_photosynthetic = light_sensor.value(LIGHT_SENSOR_PHOTOSYNTHETIC);
-  uint16_t light_solar = light_sensor.value(LIGHT_SENSOR_TOTAL_SOLAR);
-
-  const uint16_t *accept = NULL;
-  int num = REST.get_header_accept(request, &accept);
-
-  if ((num==0) || (num && accept[0]==REST.type.TEXT_PLAIN))
-  {
-    REST.set_header_content_type(response, REST.type.TEXT_PLAIN);
-    snprintf((char *)buffer, REST_MAX_CHUNK_SIZE, "%u;%u", light_photosynthetic, light_solar);
-
-    REST.set_response_payload(response, (uint8_t *)buffer, strlen((char *)buffer));
-  }
-  else if (num && (accept[0]==REST.type.APPLICATION_XML))
-  {
-    REST.set_header_content_type(response, REST.type.APPLICATION_XML);
-    snprintf((char *)buffer, REST_MAX_CHUNK_SIZE, "<light photosynthetic=\"%u\" solar=\"%u\"/>", light_photosynthetic, light_solar);
-
-    REST.set_response_payload(response, buffer, strlen((char *)buffer));
-  }
-  else if (num && (accept[0]==REST.type.APPLICATION_JSON))
-  {
-    REST.set_header_content_type(response, REST.type.APPLICATION_JSON);
-    snprintf((char *)buffer, REST_MAX_CHUNK_SIZE, "{'light':{'photosynthetic':%u,'solar':%u}}", light_photosynthetic, light_solar);
-
-    REST.set_response_payload(response, buffer, strlen((char *)buffer));
-  }
-  else
-  {
-    REST.set_response_status(response, REST.status.UNSUPPORTED_MADIA_TYPE);
-    const char *msg = "Supporting content-types text/plain, application/xml, and application/json";
-    REST.set_response_payload(response, msg, strlen(msg));
-  }
-}
-#endif /* PLATFORM_HAS_LIGHT */
-
-/******************************************************************************/
 #if REST_RES_BATTERY && defined (PLATFORM_HAS_BATTERY)
 /* A simple getter example. Returns the reading from light sensor with a simple etag */
 RESOURCE(battery, METHOD_GET, "sensors/battery", "title=\"Battery status\";rt=\"Battery\"");
@@ -948,68 +868,6 @@ battery_handler(void* request, void* response, uint8_t *buffer, uint16_t preferr
 #endif /* PLATFORM_HAS_BATTERY */
 
 
-#if defined (PLATFORM_HAS_RADIO) && REST_RES_RADIO
-/* A simple getter example. Returns the reading of the rssi/lqi from radio sensor */
-RESOURCE(radio, METHOD_GET, "sensor/radio", "title=\"RADIO: ?p=lqi|rssi\";rt=\"RadioSensor\"");
-
-void
-radio_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
-{
-  size_t len = 0;
-  const char *p = NULL;
-  uint8_t param = 0;
-  int success = 1;
-
-  const uint16_t *accept = NULL;
-  int num = REST.get_header_accept(request, &accept);
-
-  if ((len=REST.get_query_variable(request, "p", &p))) {
-    PRINTF("p %.*s\n", len, p);
-    if (strncmp(p, "lqi", len)==0) {
-      param = RADIO_SENSOR_LAST_VALUE;
-    } else if(strncmp(p,"rssi", len)==0) {
-      param = RADIO_SENSOR_LAST_PACKET;
-    } else {
-      success = 0;
-    }
-  } else {
-    success = 0;
-  }
-
-  if (success) {
-    if ((num==0) || (num && accept[0]==REST.type.TEXT_PLAIN))
-    {
-      REST.set_header_content_type(response, REST.type.TEXT_PLAIN);
-      snprintf((char *)buffer, REST_MAX_CHUNK_SIZE, "%d", radio_sensor.value(param));
-
-      REST.set_response_payload(response, (uint8_t *)buffer, strlen((char *)buffer));
-    }
-    else if (num && (accept[0]==REST.type.APPLICATION_JSON))
-    {
-      REST.set_header_content_type(response, REST.type.APPLICATION_JSON);
-
-      if (param == RADIO_SENSOR_LAST_VALUE) {
-        snprintf((char *)buffer, REST_MAX_CHUNK_SIZE, "{'lqi':%d}", radio_sensor.value(param));
-      } else if (param == RADIO_SENSOR_LAST_PACKET) {
-        snprintf((char *)buffer, REST_MAX_CHUNK_SIZE, "{'rssi':%d}", radio_sensor.value(param));
-      }
-
-      REST.set_response_payload(response, buffer, strlen((char *)buffer));
-    }
-    else
-    {
-      REST.set_response_status(response, REST.status.UNSUPPORTED_MADIA_TYPE);
-      const char *msg = "Supporting content-types text/plain and application/json";
-      REST.set_response_payload(response, msg, strlen(msg));
-    }
-  } else {
-    REST.set_response_status(response, REST.status.BAD_REQUEST);
-  }
-}
-#endif
-
-
-
 PROCESS(rest_server_example, "Erbium Example Server");
 AUTOSTART_PROCESSES(&rest_server_example);
 
@@ -1031,35 +889,17 @@ PROCESS_THREAD(rest_server_example, ev, data)
   PRINTF("IP+UDP header: %u\n", UIP_IPUDPH_LEN);
   PRINTF("REST max chunk: %u\n", REST_MAX_CHUNK_SIZE);
 
-/* if static routes are used rather than RPL */
-#if !UIP_CONF_IPV6_RPL && !defined (CONTIKI_TARGET_MINIMAL_NET) && !defined (CONTIKI_TARGET_NATIVE)
-  set_global_address();
-  configure_routing();
-#endif
-
   /* Initialize the REST engine. */
   rest_init_engine();
 
   /* Activate the application-specific resources. */
 
 #if REST_RES_TEMP
-  rest_activate_resource(&resource_temp);
+  rest_activate_periodic_resource(&periodic_resource_temp);
   tmp102_init();
-#endif
-#if REST_RES_HELLO
-  rest_activate_resource(&resource_helloworld);
-#endif
-#if REST_RES_MIRROR
-  rest_activate_resource(&resource_mirror);
-#endif
-#if REST_RES_CHUNKS
-  rest_activate_resource(&resource_chunks);
 #endif
 #if REST_RES_PUSHING
   rest_activate_periodic_resource(&periodic_resource_pushing);
-#endif
-#if defined (PLATFORM_HAS_BUTTON) && REST_RES_EVENT
-  rest_activate_event_resource(&resource_event);
 #endif
 #if defined (PLATFORM_HAS_BUTTON) && REST_RES_SEPARATE && WITH_COAP > 3
   /* No pre-handler anymore, user coap_separate_accept() and coap_separate_reject(). */
@@ -1068,28 +908,9 @@ PROCESS_THREAD(rest_server_example, ev, data)
 #if defined (PLATFORM_HAS_BUTTON) && (REST_RES_EVENT || (REST_RES_SEPARATE && WITH_COAP > 3))
   SENSORS_ACTIVATE(button_sensor);
 #endif
-#if REST_RES_SUB
-  rest_activate_resource(&resource_sub);
-#endif
-#if defined (PLATFORM_HAS_LEDS)
-#if REST_RES_LEDS
-  rest_activate_resource(&resource_leds);
-#endif
-#if REST_RES_TOGGLE
-  rest_activate_resource(&resource_toggle);
-#endif
-#endif /* PLATFORM_HAS_LEDS */
-#if defined (PLATFORM_HAS_LIGHT) && REST_RES_LIGHT
-  SENSORS_ACTIVATE(light_sensor);
-  rest_activate_resource(&resource_light);
-#endif
 #if defined (PLATFORM_HAS_BATTERY) && REST_RES_BATTERY
   SENSORS_ACTIVATE(battery_sensor);
   rest_activate_resource(&resource_battery);
-#endif
-#if defined (PLATFORM_HAS_RADIO) && REST_RES_RADIO
-  SENSORS_ACTIVATE(radio_sensor);
-  rest_activate_resource(&resource_radio);
 #endif
 
   /* Define application-specific events here. */

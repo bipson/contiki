@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, Institute for Pervasive Computing, ETH Zurich
+ * Copyright (c) 2013, Matthias Kovatsch
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,8 +29,8 @@
  *
  */
 
-#ifndef __PROJECT_ERBIUM_CONF_H__
-#define __PROJECT_ERBIUM_CONF_H__
+#ifndef PROJECT_ERBIUM_CONF_H_
+#define PROJECT_ERBIUM_CONF_H_
 
 /* Some platforms have weird includes. */
 #undef IEEE802154_CONF_PANID
@@ -66,15 +66,15 @@
 #define COAP_MAX_OBSERVERS      2
 */
 
-/* Filtering can be disabled to save space. */
+/* Filtering .well-known/core per query can be disabled to save space. */
 /*
 #undef COAP_LINK_FORMAT_FILTERING
 #define COAP_LINK_FORMAT_FILTERING      0
 */
 
 /* Save some memory for the sky platform. */
-#undef UIP_CONF_DS6_NBR_NBU
-#define UIP_CONF_DS6_NBR_NBU     10
+#undef NBR_TABLE_CONF_MAX_NEIGHBORS
+#define NBR_TABLE_CONF_MAX_NEIGHBORS     10
 #undef UIP_CONF_MAX_ROUTES
 #define UIP_CONF_MAX_ROUTES   10
 
@@ -85,4 +85,4 @@
 #undef SICSLOWPAN_CONF_FRAG
 #define SICSLOWPAN_CONF_FRAG	1
 
-#endif /* __PROJECT_ERBIUM_CONF_H__ */
+#endif /* PROJECT_ERBIUM_CONF_H_ */

@@ -61,8 +61,8 @@
  *
  */
 
-#ifndef __UIPOPT_H__
-#define __UIPOPT_H__
+#ifndef UIPOPT_H_
+#define UIPOPT_H_
 
 #ifndef UIP_LITTLE_ENDIAN
 #define UIP_LITTLE_ENDIAN  3412
@@ -213,11 +213,6 @@
 #define UIP_CONF_DS6_PREFIX_NBU     2
 #endif
 
-#ifndef UIP_CONF_DS6_NBR_NBU
-/** Default number of neighbors that can be stored in the %neighbor cache */
-#define UIP_CONF_DS6_NBR_NBU    4
-#endif
-
 #ifndef UIP_CONF_DS6_DEFRT_NBU
 /** Minimum number of default routers */
 #define UIP_CONF_DS6_DEFRT_NBU       2
@@ -286,15 +281,15 @@
  */
 
 /**
- * Toggles whether UDP support should be compiled in or not.
+ * Toggles whether TCP support should be compiled in or not.
  *
  * \hideinitializer
  */
 #ifdef UIP_CONF_TCP
 #define UIP_TCP (UIP_CONF_TCP)
-#else /* UIP_CONF_UDP */
+#else /* UIP_CONF_TCP */
 #define UIP_TCP           1
-#endif /* UIP_CONF_UDP */
+#endif /* UIP_CONF_TCP */
 
 /**
  * Determines if support for opening connections from uIP should be
@@ -677,6 +672,6 @@ void uip_log(char *msg);
  */
 /** @} */
 
-#endif /* __UIPOPT_H__ */
+#endif /* UIPOPT_H_ */
 /** @} */
 /** @} */

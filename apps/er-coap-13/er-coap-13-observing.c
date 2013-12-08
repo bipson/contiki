@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Institute for Pervasive Computing, ETH Zurich
+ * Copyright (c) 2013, Institute for Pervasive Computing, ETH Zurich
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -238,7 +238,7 @@ coap_observe_handler(resource_t *resource, void *request, void *response)
          * For demonstration purposes only. A subscription should return the same representation as a normal GET.
          * TODO: Comment the following line for any real application.
          */
-        coap_set_payload(coap_res, content, snprintf(content, sizeof(content), "Added %u/%u", list_length(observers_list), COAP_MAX_OBSERVERS));
+        //coap_set_payload(coap_res, content, snprintf(content, sizeof(content), "Added %u/%u", list_length(observers_list), COAP_MAX_OBSERVERS));
       }
       else
       {

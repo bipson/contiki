@@ -297,10 +297,6 @@ PROCESS(resolv_process, "DNS resolver");
 
 static void resolv_found(char *name, uip_ipaddr_t * ipaddr);
 
-enum {
-  EVENT_NEW_SERVER = 0
-};
-
 /** \internal The DNS question message structure. */
 struct dns_question {
   uint16_t type;
@@ -570,22 +566,55 @@ mdns_write_announce_records(unsigned char *queryptr, uint8_t *count)
 static size_t
 mdns_prep_host_announce_packet(void)
 {
+  static const struct {
+    uint16_t type;
+    uint16_t class;
+    uint16_t ttl[2];
+    uint16_t len;
+    uint8_t data[8];
+
+  } nsec_record = {
+    UIP_HTONS(DNS_TYPE_NSEC),
+    UIP_HTONS(DNS_CLASS_IN | 0x8000),
+    { 0, UIP_HTONS(120) },
+    UIP_HTONS(8),
+
+    {
+      0xc0,
+      sizeof(struct dns_hdr), /* Name compression. Re-using the name of first record. */
+      0x00,
+      0x04,
+
+#if UIP_CONF_IPV6
+      0x00,
+      0x00,
+      0x00,
+      0x08,
+#else /* UIP_CONF_IPV6 */
+      0x40,
+      0x00,
+      0x00,
+      0x00,
+#endif /* UIP_CONF_IPV6 */
+    }
+  };
+
   unsigned char *queryptr;
-
-  struct dns_answer *ans;
-
-  struct dns_hdr *hdr;
 
   uint8_t total_answers = 0;
 
-  hdr = (struct dns_hdr *)uip_appdata;
+  struct dns_answer *ans;
+
+  /* Be aware that, unless `ARCH_DOESNT_NEED_ALIGNED_STRUCTS` is set,
+   * writing directly to the uint16_t members of this struct is an error. */
+  struct dns_hdr *hdr = (struct dns_hdr *)uip_appdata;
+
+  /* Zero out the header */
+  memset((void *)hdr, 0, sizeof(*hdr));
 
   hdr->flags1 |= DNS_FLAG1_RESPONSE | DNS_FLAG1_AUTHORATIVE;
-  hdr->numquestions = UIP_HTONS(0);
-  hdr->numauthrr = 0;
-  hdr->numextrarr = 0;
 
-  queryptr = (unsigned char *)hdr + sizeof(*hdr);
+  queryptr = (unsigned char *)uip_appdata + sizeof(*hdr);
 
   queryptr = mdns_write_announce_records(queryptr, &total_answers);
 
@@ -595,34 +624,19 @@ mdns_prep_host_announce_packet(void)
   if(!total_answers) {
     queryptr = encode_name(queryptr, resolv_hostname);
   } else {
+    /* Name compression. Re-using the name of first record. */
     *queryptr++ = 0xc0;
     *queryptr++ = sizeof(*hdr);
   }
-  ans = (struct dns_answer *)queryptr;
-  ans->type = UIP_HTONS(DNS_TYPE_NSEC);
-  ans->class = UIP_HTONS(DNS_CLASS_IN | 0x8000);
-  ans->ttl[0] = 0;
-  ans->ttl[1] = UIP_HTONS(120);
-  ans->len = UIP_HTONS(8);
-  queryptr += 10;
-  *queryptr++ = 0xc0;
-  *queryptr++ = sizeof(*hdr);
-  *queryptr++ = 0x00;
-  *queryptr++ = 0x04;
-#if UIP_CONF_IPV6
-  *queryptr++ = 0x00;
-  *queryptr++ = 0x00;
-  *queryptr++ = 0x00;
-  *queryptr++ = 0x08;
-#else /* UIP_CONF_IPV6 */
-  *queryptr++ = 0x40;
-  *queryptr++ = 0x00;
-  *queryptr++ = 0x00;
-  *queryptr++ = 0x00;
-#endif /* UIP_CONF_IPV6 */
 
-  hdr->numanswers = uip_htons(total_answers);
-  hdr->numextrarr = UIP_HTONS(1);
+  memcpy((void *)queryptr, (void *)&nsec_record, sizeof(nsec_record));
+
+  queryptr += sizeof(nsec_record);
+
+  /* This platform might be picky about alignment. To avoid the possibility
+   * of doing an unaligned write, we are going to do this manually. */
+  ((uint8_t*)&hdr->numanswers)[1] = total_answers;
+  ((uint8_t*)&hdr->numextrarr)[1] = 1;
 
   return (queryptr - (unsigned char *)uip_appdata);
 }
@@ -1121,7 +1135,6 @@ PROCESS_THREAD(resolv_process, ev, data)
   PRINTF("resolver: Process started.\n");
 
   resolv_conn = udp_new(NULL, 0, NULL);
-  resolv_conn->rport = 0;
 
 #if RESOLV_CONF_SUPPORTS_MDNS
   PRINTF("resolver: Supports MDNS.\n");
@@ -1402,7 +1415,6 @@ void
 resolv_conf(const uip_ipaddr_t * dnsserver)
 {
   uip_ipaddr_copy(&resolv_default_dns_server, dnsserver);
-  process_post(&resolv_process, EVENT_NEW_SERVER, &resolv_default_dns_server);
 }
 /*---------------------------------------------------------------------------*/
 /** \internal

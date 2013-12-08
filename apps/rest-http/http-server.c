@@ -378,7 +378,7 @@ content_type_t http_get_header_content_type(http_request_t* request)
   if (content_type_string) {
     int i = 0;
     for(; i < sizeof(content_types)/sizeof(const char*) ; i++) {
-      if (strcmp(content_types[i], content_type_string)) {
+      if (strncmp(content_types[i], content_type_string, strlen(content_types[i])) == 0) {
         return (content_type_t)i;
       }
     }

@@ -1,17 +1,9 @@
-all: er-example-server er-example-client
+all: er-example-server
+#er-example-client
 # Use this target explicitly if requried: er-plugtest-server
 
 CONTIKI=../..
 CFLAGS += -DPROJECT_CONF_H=\"project-conf.h\"
-
-# for static routing, if enabled
-ifneq ($(TARGET), minimal-net)
-ifneq ($(TARGET), native)
-ifneq ($(findstring avr,$(TARGET)), avr)
-PROJECT_SOURCEFILES += static-routing.c
-endif
-endif
-endif
 
 # variable for root Makefile.include
 WITH_UIP6=1
@@ -20,7 +12,7 @@ UIP_CONF_IPV6=1
 
 # variable for this Makefile
 # configure CoAP implementation (3|7) (er-coap-07 also supports CoAP draft 08)
-WITH_COAP=7
+WITH_COAP=13
 
 # new variable since slip-radio
 ifneq ($(TARGET), minimal-net)
@@ -38,7 +30,13 @@ endif
 SMALL=1
 
 # REST framework, requires WITH_COAP
-ifeq ($(WITH_COAP), 7)
+ifeq ($(WITH_COAP), 13)
+${info INFO: compiling with CoAP-13}
+CFLAGS += -DWITH_COAP=13
+CFLAGS += -DREST=coap_rest_implementation
+CFLAGS += -DUIP_CONF_TCP=0
+APPS += er-coap-13
+else ifeq ($(WITH_COAP), 7)
 ${info INFO: compiling with CoAP-08}
 CFLAGS += -DWITH_COAP=7
 CFLAGS += -DREST=coap_rest_implementation

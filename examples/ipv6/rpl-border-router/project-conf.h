@@ -53,6 +53,8 @@
 
 /* taken from z1-wiki - should disable RDC */
 #undef NETSTACK_CONF_RDC
-#define NETSTACK_CONF_RDC	nullrdc_driver
+//#define NETSTACK_CONF_RDC	nullrdc_driver
+#define NETSTACK_CONF_RDC   contikimac_driver
+
 
 #endif /* PROJECT_ROUTER_CONF_H_ */

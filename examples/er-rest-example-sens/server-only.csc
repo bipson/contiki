@@ -92,7 +92,7 @@
   <plugin>
     org.contikios.cooja.plugins.SimControl
     <width>259</width>
-    <z>5</z>
+    <z>0</z>
     <height>179</height>
     <location_x>0</location_x>
     <location_y>0</location_y>
@@ -106,6 +106,7 @@
       <skin>org.contikios.cooja.plugins.skins.AttributeVisualizerSkin</skin>
       <skin>org.contikios.cooja.plugins.skins.LEDVisualizerSkin</skin>
       <skin>org.contikios.cooja.plugins.skins.AddressVisualizerSkin</skin>
+      <skin>org.contikios.cooja.plugins.skins.TrafficVisualizerSkin</skin>
       <viewport>3.603963463944801 0.0 0.0 3.603963463944801 -29.373661354494487 33.917772898359374</viewport>
     </plugin_config>
     <width>362</width>
@@ -122,7 +123,7 @@
       <coloring />
     </plugin_config>
     <width>555</width>
-    <z>2</z>
+    <z>3</z>
     <height>434</height>
     <location_x>7</location_x>
     <location_y>182</location_y>
@@ -137,7 +138,7 @@
       <analyzers name="6lowpan" />
     </plugin_config>
     <width>463</width>
-    <z>3</z>
+    <z>5</z>
     <height>491</height>
     <location_x>570</location_x>
     <location_y>13</location_y>
@@ -151,10 +152,10 @@
       <showRadioHW />
       <showLEDs />
       <showWatchpoints />
-      <zoomfactor>25.49079397896416</zoomfactor>
+      <zoomfactor>100000.0</zoomfactor>
     </plugin_config>
     <width>1400</width>
-    <z>4</z>
+    <z>2</z>
     <height>254</height>
     <location_x>9</location_x>
     <location_y>630</location_y>
@@ -163,7 +164,7 @@
     SerialSocketServer
     <mote_arg>0</mote_arg>
     <width>432</width>
-    <z>0</z>
+    <z>4</z>
     <height>90</height>
     <location_x>580</location_x>
     <location_y>527</location_y>

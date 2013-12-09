@@ -37,7 +37,8 @@
 /* Disabling RDC for demo purposes. Core updates often require more memory. */
 /* For projects, optimize memory and enable RDC again. */
 #undef NETSTACK_CONF_RDC
-#define NETSTACK_CONF_RDC     nullrdc_driver
+//#define NETSTACK_CONF_RDC     nullrdc_driver
+#define NETSTACK_CONF_RDC       contikimac_driver 
 
 /* Save some memory for the sky platform. */
 #undef UIP_CONF_DS6_NBR_NBU

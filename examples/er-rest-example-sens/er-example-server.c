@@ -89,6 +89,71 @@ char tempstring[TEMP_BUFF_MAX];
 /******************************************************************************/
 /* helper functions ***********************************************************/
 /******************************************************************************/
+
+void
+send_message(const char* message, const uint16_t size_msg, void *request, void *response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
+{
+  PRINTF("Send Message: Size = %d, Offset = %d\n", size_msg, *offset);
+  PRINTF("Preferred Size: %d\n", preferred_size);
+
+  uint16_t length;
+  char *err_msg;
+  const char* len;
+
+  length = size_msg - *offset;
+
+  if (length <= 0)
+  {
+    PRINTF("AHOYHOY?!\n");
+    REST.set_response_status(response, REST.status.INTERNAL_SERVER_ERROR);
+    err_msg = "calculation of message length error";
+    REST.set_response_payload(response, err_msg, strlen(err_msg));
+    return;
+  }
+
+  if (preferred_size < 0 || preferred_size > REST_MAX_CHUNK_SIZE)
+  {
+    preferred_size = REST_MAX_CHUNK_SIZE;
+    PRINTF("Preferred size set to REST_MAX_CHUNK_SIZE = %d\n", preferred_size);
+  }
+
+  if (length > preferred_size)
+  {
+    PRINTF("Message still larger then preferred_size, trunkating...\n");
+    length = preferred_size;
+    PRINTF("Length is now %u\n", length);
+
+    memcpy(buffer, message + *offset, length);
+
+    /* Truncate if above CHUNKS_TOTAL bytes. */
+    if (*offset+length > CHUNKS_TOTAL)
+    {
+      PRINTF("Reached CHUNKS_TOTAL, truncating...\n");
+      length = CHUNKS_TOTAL - *offset;
+      PRINTF("Length is now %u\n", length);
+      PRINTF("End of resource, setting offset to -1\n");
+      *offset = -1;
+    }
+    else
+    {
+      /* IMPORTANT for chunk-wise resources: Signal chunk awareness to REST engine. */
+      *offset += length;
+      PRINTF("Offset refreshed to %u\n", *offset);
+    }
+  }
+  else
+  {
+    memcpy(buffer, message + *offset, length);
+    *offset = -1;
+  }
+  
+  PRINTF("Sending response chunk: length = %u, offset = %d\n", length, *offset);
+
+  REST.set_header_etag(response, (uint8_t *) &length, 1);
+  REST.set_response_payload(response, buffer, length);
+}
+
+
 int temp_to_buff(char* buffer) {
   int16_t  tempint;
   uint16_t tempfrac;
@@ -186,6 +251,7 @@ PERIODIC_RESOURCE(temp, METHOD_GET, "temp", "title=\"Hello temp: ?len=0..\";rt=\
 void
 temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_size, int32_t *offset)
 {
+  PRINTF("temp_handler called\n");
   /* we save the message as static variable, so it is retained through multiple calls (chunked resource) */
   static char message[TEMP_MSG_MAX_SIZE];
   static uint8_t size_msg;
@@ -193,8 +259,6 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
   const uint16_t *accept = NULL;
   int num = 0, length = 0;
   char *err_msg;
-
-  const char *len = NULL;
 
   /* Check the offset for boundaries of the resource data. */
   if (*offset>=CHUNKS_TOTAL)
@@ -240,36 +304,8 @@ temp_handler(void* request, void* response, uint8_t *buffer, uint16_t preferred_
     }
 
   }
-  
-  length = size_msg - *offset;
 
-  if (length>REST_MAX_CHUNK_SIZE)     
-  {
-    length = REST_MAX_CHUNK_SIZE;
-
-    memcpy(buffer, message + *offset, length);
-
-    /* Truncate if above CHUNKS_TOTAL bytes. */
-    if (*offset+length > CHUNKS_TOTAL)
-    {
-      length = CHUNKS_TOTAL - *offset;
-    }
-
-    /* IMPORTANT for chunk-wise resources: Signal chunk awareness to REST engine. */
-    *offset += length;
-
-    /* Signal end of resource representation. */
-    if (*offset>=CHUNKS_TOTAL)
-    {
-      *offset = -1;
-    }
-  } else {
-    memcpy(buffer, message + *offset, length);
-    *offset = -1;
-  }
-
-  REST.set_header_etag(response, (uint8_t *) &length, 1);
-  REST.set_response_payload(response, buffer, length);
+  send_message(message, size_msg, request, response, buffer, preferred_size, offset);
 
 }
 
